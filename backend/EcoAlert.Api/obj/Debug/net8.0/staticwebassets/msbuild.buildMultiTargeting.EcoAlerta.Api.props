@@ -1,0 +1,3 @@
+﻿<Project>
+  <Import Project="..\build\EcoAlerta.Api.props" />
+</Project>

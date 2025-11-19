@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "6zFKfNRsDsHmFWgykAIGbQd4/Bcx92n9LdVCr7TMBW4=",
+  "Source": "EcoAlerta.Api",
+  "BasePath": "_content/EcoAlerta.Api",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}

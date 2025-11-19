@@ -1,0 +1,112 @@
+/* Reset e estilos globais base */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  /* Cores do tema - Paleta de queimadas (vermelho, laranja, amarelo queimado) */
+  --cor-primaria: #8b0000;
+  --cor-secundaria: #ff6f00;
+  --cor-sucesso: #ff8c00;
+  --cor-perigo: #d32f2f;
+  --cor-aviso: #ff8f00;
+  --cor-texto: #2c2c2c;
+  --cor-texto-secundario: #5a4a3a;
+  --cor-fundo: #fff5e6;
+  --cor-branco: #ffffff;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #fff5f0 0%, #ffe8e0 100%);
+  color: var(--cor-texto);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Estilos tipográficos */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--cor-primaria);
+  font-weight: 600;
+}
+
+p {
+  color: var(--cor-texto);
+}
+
+/* Links */
+a {
+  color: var(--cor-secundaria);
+  text-decoration: none;
+  transition: color 0.3s;
+}
+
+a:hover {
+  color: #2980b9;
+}
+
+/* Botões */
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: var(--cor-secundaria);
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.25s, transform 0.2s;
+}
+
+button:hover {
+  background-color: #2980b9;
+  transform: translateY(-1px);
+}
+
+button:focus,
+button:focus-visible {
+  outline: 4px auto var(--cor-secundaria);
+}
+
+/* Inputs */
+input, select, textarea {
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+/* Scrollbar customizada (opcional) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
