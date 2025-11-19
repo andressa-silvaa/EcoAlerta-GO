@@ -1,0 +1,48 @@
+# --- Diretórios e artefatos do .NET ---
+bin/
+obj/
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+
+# Build e publicação
+**/Publish/
+**/Debug/
+**/Release/
+
+# Configurações locais / sensíveis
+appsettings.*.local.json
+secrets.json
+
+# --- Node / Frontend ---
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.eslintcache
+
+# Arquivos de log e temporários
+*.log
+*.tmp
+*.temp
+~$*
+
+# Sistema operacional
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+
+# Ambientes / variáveis
+.env
+.env.*
+
+# Outros artefatos
+coverage/
+*.coverage
+*.coveragexml
+*.opendb
+*.orig
+
