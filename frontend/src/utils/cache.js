@@ -1,51 +1,54 @@
-/**
- * Sistema de cache simples para requisições de API
- * Reduz chamadas duplicadas ao backend
- */
+import { CACHE_TTL_MS } from '../constants/appConfig';
+
+const LOG_PREFIX = '💾 Cache';
 
 class ApiCache {
-  constructor(ttl = 5 * 60 * 1000) { // 5 minutos padrão
+  constructor(ttl = CACHE_TTL_MS) {
     this.cache = new Map();
     this.ttl = ttl;
   }
 
-  generateKey(endpoint, params) {
-    const sortedParams = Object.keys(params || {})
+  generateKey(endpoint, params = {}) {
+    const sortedParams = Object.keys(params)
       .sort()
-      .map(key => `${key}=${params[key]}`)
+      .filter((key) => params[key] != null)
+      .map((key) => `${key}=${params[key]}`)
       .join('&');
-    return `${endpoint}?${sortedParams}`;
+    return sortedParams ? `${endpoint}?${sortedParams}` : endpoint;
   }
 
   get(key) {
     const cached = this.cache.get(key);
     if (!cached) return null;
 
-    const now = Date.now();
-    if (now - cached.timestamp > this.ttl) {
+    if (this._isExpired(cached.timestamp)) {
       this.cache.delete(key);
       return null;
     }
 
-    console.log('✨ Cache HIT:', key);
+    console.log(`${LOG_PREFIX} ✨ HIT:`, key);
     return cached.data;
   }
 
   set(key, data) {
-    console.log('💾 Cache SET:', key);
+    console.log(`${LOG_PREFIX} SET:`, key);
     this.cache.set(key, {
       data,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
   clear() {
-    console.log('🗑️ Cache limpo');
+    console.log(`${LOG_PREFIX} 🗑️ Cleared`);
     this.cache.clear();
   }
 
   size() {
     return this.cache.size;
+  }
+
+  _isExpired(timestamp) {
+    return Date.now() - timestamp > this.ttl;
   }
 }
 

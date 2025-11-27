@@ -1,98 +1,75 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useDebounce } from '../hooks/useDebounce';
+import { useMunicipios } from '../hooks/useMunicipios';
+import { createDefaultDateRange } from '../utils/dateUtils';
+import { validateDateRange } from '../utils/validation';
+import { DEBOUNCE_DELAY_MS, DEFAULT_DATE_RANGE_DAYS } from '../constants/appConfig';
 import './Filtros.css';
 
-const criarIntervaloPadrao = () => {
-  const hoje = new Date();
-  const inicio = new Date();
-  inicio.setDate(hoje.getDate() - 30);
+const MAX_DROPDOWN_ITEMS = 10;
 
+const createDefaultFilters = () => {
+  const { start, end } = createDefaultDateRange(DEFAULT_DATE_RANGE_DAYS);
   return {
-    dataInicio: inicio.toISOString().split('T')[0],
-    dataFim: hoje.toISOString().split('T')[0],
+    dataInicio: start,
+    dataFim: end,
     municipio: '',
   };
 };
 
 function Filtros({ onFiltrosChange }) {
-  const [inputs, setInputs] = useState(criarIntervaloPadrao);
+  const [inputs, setInputs] = useState(createDefaultFilters);
   const [erro, setErro] = useState('');
-  const [municipios, setMunicipios] = useState([]);
   const [municipiosFiltrados, setMunicipiosFiltrados] = useState([]);
   const [mostrarDropdown, setMostrarDropdown] = useState(false);
   const [buscaMunicipio, setBuscaMunicipio] = useState('');
   const [aguardandoDebounce, setAguardandoDebounce] = useState(false);
   const dropdownRef = useRef(null);
-  
-  // Debounce para evitar múltiplas requisições ao ajustar datas
-  const debouncedInputs = useDebounce(inputs, 800);
 
-  // Busca municípios de Goiás da API do IBGE
+  const { municipios } = useMunicipios();
+  const debouncedInputs = useDebounce(inputs, DEBOUNCE_DELAY_MS);
+
   useEffect(() => {
-    const carregarMunicipios = async () => {
-      try {
-        const response = await fetch(
-          'https://servicodados.ibge.gov.br/api/v1/localidades/estados/GO/municipios?orderBy=nome'
-        );
-        const dados = await response.json();
-        const nomes = dados.map(m => m.nome);
-        setMunicipios(nomes);
-        setMunicipiosFiltrados(nomes);
-      } catch (error) {
-        console.error('Erro ao carregar municípios:', error);
-      }
-    };
+    setMunicipiosFiltrados(municipios);
+  }, [municipios]);
 
-    carregarMunicipios();
-  }, []);
-
-  // Carrega dados iniciais
   useEffect(() => {
     if (onFiltrosChange) {
-      aplicarFiltros();
+      applyFilters(inputs);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Monitora mudanças nos inputs para mostrar indicador de debounce
   useEffect(() => {
-    // Se inputs mudaram mas debounced ainda não, está aguardando
-    const inputsStr = JSON.stringify(inputs);
-    const debouncedStr = JSON.stringify(debouncedInputs);
-    
-    if (inputsStr !== debouncedStr) {
-      setAguardandoDebounce(true);
-    } else {
-      setAguardandoDebounce(false);
-    }
+    const isWaitingForDebounce = JSON.stringify(inputs) !== JSON.stringify(debouncedInputs);
+    setAguardandoDebounce(isWaitingForDebounce);
   }, [inputs, debouncedInputs]);
 
-  // Aplica filtros automaticamente quando debounce terminar
   useEffect(() => {
     if (onFiltrosChange) {
-      aplicarFiltros(debouncedInputs);
+      applyFilters(debouncedInputs);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedInputs]);
 
-  // Fecha dropdown ao clicar fora
   useEffect(() => {
-    const handleClickFora = (event) => {
+    const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setMostrarDropdown(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickFora);
-    return () => document.removeEventListener('mousedown', handleClickFora);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const aplicarFiltros = useCallback((novosInputs = inputs) => {
-    const dataInicio = novosInputs.dataInicio ? new Date(novosInputs.dataInicio) : null;
-    const dataFim = novosInputs.dataFim ? new Date(novosInputs.dataFim) : null;
+  const applyFilters = useCallback((filterInputs = inputs) => {
+    const dataInicio = filterInputs.dataInicio ? new Date(filterInputs.dataInicio) : null;
+    const dataFim = filterInputs.dataFim ? new Date(filterInputs.dataFim) : null;
 
-    if (dataInicio && dataFim && dataInicio > dataFim) {
-      setErro('A data de início deve ser anterior à data de fim');
+    const validation = validateDateRange(dataInicio, dataFim);
+    if (!validation.isValid) {
+      setErro(validation.error);
       return;
     }
 
@@ -100,65 +77,56 @@ function Filtros({ onFiltrosChange }) {
     onFiltrosChange({
       dataInicio,
       dataFim,
-      municipio: novosInputs.municipio.trim() || null,
+      municipio: filterInputs.municipio.trim() || null,
     });
-  }, [onFiltrosChange]);
+  }, [onFiltrosChange, inputs]);
 
-  const handleDataChange = useCallback((event) => {
+  const handleDateChange = useCallback((event) => {
     const { name, value } = event.target;
-    setInputs(prev => ({ ...prev, [name]: value }));
+    setInputs((prev) => ({ ...prev, [name]: value }));
     setErro('');
-    
-    // Não aplica imediatamente - será aplicado via debounce
   }, []);
 
-  const handleBuscaMunicipioChange = useCallback((event) => {
-    const busca = event.target.value;
-    setBuscaMunicipio(busca);
-    setMostrarDropdown(true);
-
-    if (!busca.trim()) {
-      setMunicipiosFiltrados(municipios);
-    } else {
-      const filtrados = municipios.filter(m =>
-        m.toLowerCase().includes(busca.toLowerCase())
-      );
-      setMunicipiosFiltrados(filtrados);
+  const filterMunicipios = useCallback((searchTerm) => {
+    if (!searchTerm.trim()) {
+      return municipios;
     }
+    return municipios.filter((m) =>
+      m.toLowerCase().includes(searchTerm.toLowerCase())
+    );
   }, [municipios]);
 
-  const handleSelecionarMunicipio = useCallback((municipio) => {
-    const novosInputs = { ...inputs, municipio };
-    setInputs(novosInputs);
-    setBuscaMunicipio(municipio);
-    setMostrarDropdown(false);
-    
-    // Aplica filtros instantaneamente ao selecionar município
+  const handleSearchChange = useCallback((event) => {
+    const searchValue = event.target.value;
+    setBuscaMunicipio(searchValue);
+    setMostrarDropdown(true);
+    setMunicipiosFiltrados(filterMunicipios(searchValue));
+  }, [filterMunicipios]);
+
+  const applyFiltersWithMunicipio = useCallback((municipio) => {
     const dataInicio = inputs.dataInicio ? new Date(inputs.dataInicio) : null;
     const dataFim = inputs.dataFim ? new Date(inputs.dataFim) : null;
 
     onFiltrosChange({
       dataInicio,
       dataFim,
-      municipio: municipio.trim(),
+      municipio: municipio?.trim() || null,
     });
   }, [inputs, onFiltrosChange]);
 
-  const handleLimparMunicipio = useCallback(() => {
+  const handleSelectMunicipio = useCallback((municipio) => {
+    setInputs((prev) => ({ ...prev, municipio }));
+    setBuscaMunicipio(municipio);
+    setMostrarDropdown(false);
+    applyFiltersWithMunicipio(municipio);
+  }, [applyFiltersWithMunicipio]);
+
+  const handleClearMunicipio = useCallback(() => {
     setInputs((prev) => ({ ...prev, municipio: '' }));
     setBuscaMunicipio('');
     setMunicipiosFiltrados(municipios);
-    
-    // Aplica filtros instantaneamente sem município
-    const dataInicio = inputs.dataInicio ? new Date(inputs.dataInicio) : null;
-    const dataFim = inputs.dataFim ? new Date(inputs.dataFim) : null;
-
-    onFiltrosChange({
-      dataInicio,
-      dataFim,
-      municipio: null,
-    });
-  }, [inputs, municipios, onFiltrosChange]);
+    applyFiltersWithMunicipio(null);
+  }, [municipios, applyFiltersWithMunicipio]);
 
   return (
     <div className="filtros-container">
@@ -178,7 +146,7 @@ function Filtros({ onFiltrosChange }) {
             id="dataInicio"
             name="dataInicio"
             value={inputs.dataInicio}
-            onChange={handleDataChange}
+            onChange={handleDateChange}
             className="filtro-input"
           />
         </div>
@@ -193,7 +161,7 @@ function Filtros({ onFiltrosChange }) {
             id="dataFim"
             name="dataFim"
             value={inputs.dataFim}
-            onChange={handleDataChange}
+            onChange={handleDateChange}
             className="filtro-input"
           />
         </div>
@@ -209,7 +177,7 @@ function Filtros({ onFiltrosChange }) {
               id="municipio"
               name="municipio"
               value={buscaMunicipio}
-              onChange={handleBuscaMunicipioChange}
+              onChange={handleSearchChange}
               onFocus={() => setMostrarDropdown(true)}
               placeholder="Selecione um município..."
               className="filtro-input municipio-input"
@@ -219,7 +187,7 @@ function Filtros({ onFiltrosChange }) {
               <button
                 type="button"
                 className="btn-limpar-input"
-                onClick={handleLimparMunicipio}
+                onClick={handleClearMunicipio}
                 title="Limpar município"
               >
                 ✕
@@ -229,18 +197,18 @@ function Filtros({ onFiltrosChange }) {
 
           {mostrarDropdown && municipiosFiltrados.length > 0 && (
             <ul className="municipios-dropdown">
-              {municipiosFiltrados.slice(0, 10).map((mun) => (
+              {municipiosFiltrados.slice(0, MAX_DROPDOWN_ITEMS).map((mun) => (
                 <li
                   key={mun}
-                  onClick={() => handleSelecionarMunicipio(mun)}
+                  onClick={() => handleSelectMunicipio(mun)}
                   className={inputs.municipio === mun ? 'selecionado' : ''}
                 >
                   {mun}
                 </li>
               ))}
-              {municipiosFiltrados.length > 10 && (
+              {municipiosFiltrados.length > MAX_DROPDOWN_ITEMS && (
                 <li className="dropdown-info">
-                  + {municipiosFiltrados.length - 10} municípios...
+                  + {municipiosFiltrados.length - MAX_DROPDOWN_ITEMS} municípios...
                 </li>
               )}
             </ul>

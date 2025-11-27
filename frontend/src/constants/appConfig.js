@@ -1,0 +1,34 @@
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5285';
+
+const DEFAULT_DATE_RANGE_DAYS = 30;
+const DEBOUNCE_DELAY_MS = 800;
+const MIN_LOADING_TIME_MS = 300;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+const MAP_CONFIG = {
+  CENTER_GOIAS: [-16.6864, -49.2643],
+  INITIAL_ZOOM: 7,
+  MARKER_WARNING_LIMIT: 8000,
+  CLUSTER: {
+    DISABLE_AT_ZOOM: 13,
+    MAX_RADIUS: 60,
+  },
+};
+
+const CHART_COLORS = {
+  PRIMARY: '#e74c3c',
+  SECONDARY: '#e67e22',
+  TERTIARY: '#f39c12',
+  QUATERNARY: '#d35400',
+};
+
+export {
+  API_BASE_URL,
+  DEFAULT_DATE_RANGE_DAYS,
+  DEBOUNCE_DELAY_MS,
+  MIN_LOADING_TIME_MS,
+  CACHE_TTL_MS,
+  MAP_CONFIG,
+  CHART_COLORS,
+};
+

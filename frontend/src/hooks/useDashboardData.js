@@ -1,11 +1,9 @@
 import { useEffect, useReducer } from 'react';
-import {
-  obterEstatisticasPorMunicipio,
-  obterQueimadas,
-  obterResumoEstatisticas,
-} from '../services/api';
+import { obterQueimadas } from '../services/api';
+import { groupFocosByDay, calculateMunicipioStats, calculateSummary, limitTopMunicipios } from '../utils/statisticsCalculator';
+import { MIN_LOADING_TIME_MS } from '../constants/appConfig';
 
-const initialState = {
+const INITIAL_STATE = {
   resumo: null,
   estatisticasMunicipios: [],
   focosPorDia: [],
@@ -13,20 +11,20 @@ const initialState = {
   error: null,
 };
 
-const actionTypes = {
-  idle: 'idle',
-  loading: 'loading',
-  success: 'success',
-  error: 'error',
+const ACTION_TYPES = {
+  IDLE: 'idle',
+  LOADING: 'loading',
+  SUCCESS: 'success',
+  ERROR: 'error',
 };
 
-const reducer = (state, action) => {
+const dashboardReducer = (state, action) => {
   switch (action.type) {
-    case actionTypes.idle:
+    case ACTION_TYPES.IDLE:
       return { ...state, status: 'idle', error: null };
-    case actionTypes.loading:
+    case ACTION_TYPES.LOADING:
       return { ...state, status: 'loading', error: null };
-    case actionTypes.success:
+    case ACTION_TYPES.SUCCESS:
       return {
         ...state,
         resumo: action.payload.resumo,
@@ -35,184 +33,79 @@ const reducer = (state, action) => {
         status: 'success',
         error: null,
       };
-    case actionTypes.error:
+    case ACTION_TYPES.ERROR:
       return { ...state, status: 'error', error: action.payload };
     default:
       return state;
   }
 };
 
-const parsePtBrDate = (value) => {
-  const [dia, mes, ano] = value.split('/');
-  return new Date(Number(ano), Number(mes) - 1, Number(dia));
-};
-
-const agruparFocosPorDia = (queimadas = []) => {
-  const mapa = new Map();
-
-  queimadas.forEach((queimada) => {
-    const data = new Date(queimada.dataHora);
-    if (Number.isNaN(data.getTime())) {
-      return;
-    }
-
-    const label = data.toLocaleDateString('pt-BR');
-    mapa.set(label, (mapa.get(label) || 0) + 1);
-  });
-
-  return Array.from(mapa.entries())
-    .map(([data, total]) => ({ data, total }))
-    .sort((a, b) => parsePtBrDate(a.data) - parsePtBrDate(b.data));
-};
-
-const limitarMunicipios = (dados = []) => dados.slice(0, 10);
-
-const calcularResumo = (queimadas = []) => {
-  if (!queimadas.length) {
-    return {
-      totalFocos: 0,
-      totalMunicipiosAfetados: 0,
-      mediaFocosPorDia: 0,
-      dataComMaisFocos: null,
-      focosNaDataMaxima: 0
-    };
+const ensureMinimumLoadingTime = async (startTime) => {
+  const elapsed = performance.now() - startTime;
+  const remaining = Math.max(0, MIN_LOADING_TIME_MS - elapsed);
+  if (remaining > 0) {
+    await new Promise((resolve) => setTimeout(resolve, remaining));
   }
+};
 
-  const municipiosUnicos = new Set(queimadas.map(q => q.municipio));
-  const focosPorDia = new Map();
+const fetchDashboardData = async (filtros) => {
+  const queimadas = await obterQueimadas(
+    filtros.dataInicio,
+    filtros.dataFim,
+    filtros.municipio
+  );
 
-  queimadas.forEach(q => {
-    const data = new Date(q.dataHora).toLocaleDateString('pt-BR');
-    focosPorDia.set(data, (focosPorDia.get(data) || 0) + 1);
-  });
-
-  const diasComDados = focosPorDia.size || 1;
-  let dataMaxima = null;
-  let focosMaximos = 0;
-
-  focosPorDia.forEach((focos, data) => {
-    if (focos > focosMaximos) {
-      focosMaximos = focos;
-      dataMaxima = data;
-    }
-  });
+  const resumo = calculateSummary(queimadas);
+  const estatisticasMunicipios = calculateMunicipioStats(queimadas);
+  const focosPorDia = groupFocosByDay(queimadas);
 
   return {
-    totalFocos: queimadas.length,
-    totalMunicipiosAfetados: municipiosUnicos.size,
-    mediaFocosPorDia: queimadas.length / diasComDados,
-    dataComMaisFocos: dataMaxima,
-    focosNaDataMaxima: focosMaximos
+    resumo,
+    estatisticasMunicipios: limitTopMunicipios(estatisticasMunicipios),
+    focosPorDia,
   };
 };
 
-const calcularEstatisticasPorMunicipio = (queimadas = []) => {
-  const contagemPorMunicipio = new Map();
-
-  queimadas.forEach(q => {
-    const municipio = q.municipio || 'Desconhecido';
-    contagemPorMunicipio.set(municipio, (contagemPorMunicipio.get(municipio) || 0) + 1);
-  });
-
-  return Array.from(contagemPorMunicipio.entries())
-    .map(([municipio, totalFocos]) => ({ municipio, totalFocos }))
-    .sort((a, b) => b.totalFocos - a.totalFocos);
-};
-
 const useDashboardData = (filtros) => {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [state, dispatch] = useReducer(dashboardReducer, INITIAL_STATE);
 
   useEffect(() => {
     if (!filtros) {
-      dispatch({ type: actionTypes.idle });
+      dispatch({ type: ACTION_TYPES.IDLE });
       return;
     }
 
-    let ativo = true;
+    let isActive = true;
 
-    const carregar = async () => {
-      console.log('📊 Dashboard: Iniciando carregamento de dados...', filtros);
+    const loadData = async () => {
       const startTime = performance.now();
-      
-      dispatch({ type: actionTypes.loading });
+      dispatch({ type: ACTION_TYPES.LOADING });
 
       try {
-        console.log('📡 Dashboard: Fazendo requisições...', {
-          dataInicio: filtros.dataInicio,
-          dataFim: filtros.dataFim,
-          municipio: filtros.municipio || 'Todos os municípios'
-        });
-        
-        // Busca dados com filtro de município direto na API (mesma lógica do Mapa)
-        const queimadas = await obterQueimadas(
-          filtros.dataInicio, 
-          filtros.dataFim, 
-          filtros.municipio  // Envia o município para a API filtrar
-        );
+        const data = await fetchDashboardData(filtros);
 
-        console.log('📦 Dados recebidos da API (já filtrados):', {
-          total: queimadas.length,
-          filtroMunicipio: filtros.municipio || 'Nenhum',
-          primeiros3: queimadas.slice(0, 3).map(q => ({ municipio: q.municipio, data: q.dataHora }))
-        });
+        await ensureMinimumLoadingTime(startTime);
 
-        if (!ativo) {
-          return;
-        }
-
-        // Calcula estatísticas com base nos dados já filtrados pela API
-        const resumoCalculado = calcularResumo(queimadas);
-        const estatisticasMunicipiosCalculadas = calcularEstatisticasPorMunicipio(queimadas);
-        const focosPorDiaCalculados = agruparFocosPorDia(queimadas);
-
-        console.log('📈 Estatísticas calculadas:', {
-          resumo: resumoCalculado,
-          municipios: estatisticasMunicipiosCalculadas.length,
-          diasComFocos: focosPorDiaCalculados.length
-        });
-
-        const endTime = performance.now();
-        const tempoDecorrido = ((endTime - startTime) / 1000).toFixed(2);
-        console.log(`✅ Dashboard: Dados processados em ${tempoDecorrido}s`);
-
-        // Garante mínimo de 300ms de loading para feedback visual
-        const tempoMinimo = 300;
-        const tempoRestante = Math.max(0, tempoMinimo - (endTime - startTime));
-        
-        await new Promise(resolve => setTimeout(resolve, tempoRestante));
-
-        if (!ativo) {
-          return;
-        }
+        if (!isActive) return;
 
         dispatch({
-          type: actionTypes.success,
-          payload: {
-            resumo: resumoCalculado,
-            estatisticasMunicipios: limitarMunicipios(estatisticasMunicipiosCalculadas),
-            focosPorDia: focosPorDiaCalculados,
-          },
+          type: ACTION_TYPES.SUCCESS,
+          payload: data,
         });
       } catch (error) {
-        if (!ativo) {
-          return;
-        }
-
-        const endTime = performance.now();
-        const tempoDecorrido = ((endTime - startTime) / 1000).toFixed(2);
-        console.error(`❌ Dashboard: Erro após ${tempoDecorrido}s:`, error);
+        if (!isActive) return;
 
         dispatch({
-          type: actionTypes.error,
+          type: ACTION_TYPES.ERROR,
           payload: error.message || 'Erro ao carregar dados do servidor.',
         });
       }
     };
 
-    carregar();
+    loadData();
 
     return () => {
-      ativo = false;
+      isActive = false;
     };
   }, [filtros]);
 
