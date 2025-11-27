@@ -11,7 +11,7 @@
  * - Popup com informações detalhadas ao clicar no marcador
  * - Filtros integrados para atualizar o mapa dinamicamente
  */
-import { useState, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo, memo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import L from 'leaflet';
@@ -53,60 +53,111 @@ function AjustarVisualizacao({ center, zoom }) {
   return null;
 }
 
+/**
+ * Componente de marcador individual otimizado com React.memo
+ * Evita re-renderizações desnecessárias
+ */
+const MarcadorQueimada = memo(({ queimada, icon }) => (
+  <Marker
+    position={[Number(queimada.latitude), Number(queimada.longitude)]}
+    icon={icon}
+  >
+    <Popup>
+      <div className="popup-content">
+        <h4>🔥 Foco de Queimada</h4>
+        <p><strong>Município:</strong> {queimada.municipio}</p>
+        <p><strong>Estado:</strong> {queimada.estado}</p>
+        <p><strong>Data/Hora:</strong> {new Date(queimada.dataHora).toLocaleString('pt-BR')}</p>
+        {queimada.intensidade && (
+          <p><strong>Intensidade:</strong> {Number(queimada.intensidade).toFixed(2)}</p>
+        )}
+        {queimada.fonteSatelite && (
+          <p><strong>Fonte:</strong> {queimada.fonteSatelite}</p>
+        )}
+        <p className="coordenadas">
+          <strong>Coordenadas:</strong> {Number(queimada.latitude).toFixed(4)}, {Number(queimada.longitude).toFixed(4)}
+        </p>
+      </div>
+    </Popup>
+  </Marker>
+), (prevProps, nextProps) => {
+  // Comparação customizada para evitar re-renders desnecessários
+  return prevProps.queimada.id === nextProps.queimada.id;
+});
+
 function Mapa() {
-  // Estados para armazenar dados e controle da UI
   const [queimadas, setQueimadas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [filtros, setFiltros] = useState(null);
 
-  // Coordenadas do centro de Goiás (Goiânia)
-  const centroGoias = [-16.6864, -49.2643];
+  // Coordenadas do centro de Goiás (Goiânia) - memoizado
+  const centroGoias = useMemo(() => [-16.6864, -49.2643], []);
   const zoomInicial = 7;
   const limiteAvisoMarcadores = 8000;
 
-  const clusterConfiguracao = {
+  // Configuração otimizada do cluster - memoizado
+  const clusterConfiguracao = useMemo(() => ({
     chunkedLoading: true,
-    spiderfyOnMaxZoom: true,
+    spiderfyOnMaxZoom: false, // Desativa spider para melhor performance
     showCoverageOnHover: false,
     removeOutsideVisibleBounds: true,
-    disableClusteringAtZoom: 12
-  };
+    disableClusteringAtZoom: 13,
+    maxClusterRadius: 60, // Reduzido para agrupar mais
+    animate: false, // Desativa animações para melhor performance
+    animateAddingMarkers: false,
+    spiderLegPolylineOptions: { weight: 0 }, // Remove linhas do spider
+    zoomToBoundsOnClick: true
+  }), []);
 
-  // Função para carregar dados de queimadas do backend
-  const carregarDados = async (filtrosAtuais) => {
+  const carregarDados = useCallback(async (filtrosAtuais) => {
     if (!filtrosAtuais) return;
+
+    console.log('🔍 Iniciando busca com filtros:', filtrosAtuais);
+    const startTime = performance.now();
 
     setLoading(true);
     setError(null);
 
     try {
-      // Chama o Web Service do backend para obter queimadas
+      console.log('📡 Fazendo requisição para API...');
       const dados = await obterQueimadas(
         filtrosAtuais.dataInicio,
         filtrosAtuais.dataFim,
         filtrosAtuais.municipio
       );
 
+      const endTime = performance.now();
+      const tempoDecorrido = ((endTime - startTime) / 1000).toFixed(2);
+      console.log(`✅ Dados recebidos: ${dados.length} focos em ${tempoDecorrido}s`);
+
+      // Garante mínimo de 300ms de loading para feedback visual
+      const tempoMinimo = 300;
+      const tempoRestante = Math.max(0, tempoMinimo - (endTime - startTime));
+      
+      await new Promise(resolve => setTimeout(resolve, tempoRestante));
+
       setQueimadas(dados);
     } catch (err) {
-      console.error('Erro ao carregar queimadas:', err);
+      const endTime = performance.now();
+      const tempoDecorrido = ((endTime - startTime) / 1000).toFixed(2);
+      console.error(`❌ Erro após ${tempoDecorrido}s:`, err);
       setError(err.message || 'Erro ao carregar dados do servidor');
     } finally {
       setLoading(false);
     }
-  };
-
-  // Callback quando os filtros são alterados
-  const handleFiltrosChange = (novosFiltros) => {
-    setFiltros(novosFiltros);
-    carregarDados(novosFiltros);
-  };
-
-  // Carrega dados iniciais quando o componente é montado
-  useEffect(() => {
-    // Os dados iniciais serão carregados quando o componente Filtros definir os valores padrão
   }, []);
+
+  const handleFiltrosChange = useCallback((novosFiltros) => {
+    carregarDados(novosFiltros);
+  }, [carregarDados]);
+
+  // Renderiza marcadores de forma otimizada com componente memoizado
+  const marcadores = useMemo(() => {
+    console.log(`🗺️ Renderizando ${queimadas.length} marcadores`);
+    return queimadas.map((queimada) => (
+      <MarcadorQueimada key={queimada.id} queimada={queimada} icon={iconeQueimada} />
+    ));
+  }, [queimadas]);
 
   return (
     <div className="mapa-container">
@@ -127,70 +178,62 @@ function Mapa() {
         </div>
       )}
 
-      {loading && queimadas.length === 0 ? (
-        <div className="loading">Carregando mapa e dados...</div>
-      ) : (
-        <div className="mapa-wrapper">
-          <MapContainer
-            center={centroGoias}
-            zoom={zoomInicial}
-            style={{ height: '600px', width: '100%', borderRadius: '8px' }}
-            scrollWheelZoom={true}
-          >
-            {/* Componente para ajustar a visualização do mapa */}
-            <AjustarVisualizacao center={centroGoias} zoom={zoomInicial} />
-            
-            {/* Camada de tiles do OpenStreetMap */}
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-
-            <MarkerClusterGroup {...clusterConfiguracao}>
-              {queimadas.map((queimada) => (
-                <Marker
-                  key={queimada.id}
-                  position={[Number(queimada.latitude), Number(queimada.longitude)]}
-                  icon={iconeQueimada}
-                >
-                  <Popup>
-                    <div className="popup-content">
-                      <h4>🔥 Foco de Queimada</h4>
-                      <p><strong>Município:</strong> {queimada.municipio}</p>
-                      <p><strong>Estado:</strong> {queimada.estado}</p>
-                      <p><strong>Data/Hora:</strong> {new Date(queimada.dataHora).toLocaleString('pt-BR')}</p>
-                      {queimada.intensidade && (
-                        <p><strong>Intensidade:</strong> {Number(queimada.intensidade).toFixed(2)}</p>
-                      )}
-                      {queimada.fonteSatelite && (
-                        <p><strong>Fonte:</strong> {queimada.fonteSatelite}</p>
-                      )}
-                      <p className="coordenadas">
-                        <strong>Coordenadas:</strong> {Number(queimada.latitude).toFixed(4)}, {Number(queimada.longitude).toFixed(4)}
-                      </p>
-                    </div>
-                  </Popup>
-                </Marker>
-              ))}
-            </MarkerClusterGroup>
-          </MapContainer>
-
-          <div className="mapa-info">
-            <p>
-              <strong>Total de focos exibidos:</strong> {queimadas.length.toLocaleString('pt-BR')}
-            </p>
-            {queimadas.length > limiteAvisoMarcadores && (
-              <p className="info-warning">
-                Exibindo {queimadas.length.toLocaleString('pt-BR')} focos de maneira agrupada para manter o desempenho.
-                Aproxime o mapa para expandir os clusters e ver detalhes específicos.
-              </p>
-            )}
-            <p className="info-text">
-              Clique nos marcadores vermelhos para ver detalhes de cada foco de queimada.
-            </p>
-          </div>
+      {loading && (
+        <div className="loading-banner">
+          <div className="loading-spinner"></div>
+          <span>Carregando focos de queimadas... Aguarde alguns segundos.</span>
         </div>
       )}
+
+      <div className="mapa-wrapper" style={{ 
+        opacity: loading ? 0.5 : 1,
+        transition: 'opacity 0.3s'
+      }}>
+        {queimadas.length > 0 ? (
+          <>
+            <MapContainer
+              center={centroGoias}
+              zoom={zoomInicial}
+              style={{ height: '600px', width: '100%', borderRadius: '8px' }}
+              scrollWheelZoom={true}
+            >
+              {/* Componente para ajustar a visualização do mapa */}
+              <AjustarVisualizacao center={centroGoias} zoom={zoomInicial} />
+              
+              {/* Camada de tiles do OpenStreetMap */}
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+
+              <MarkerClusterGroup {...clusterConfiguracao}>
+                {marcadores}
+              </MarkerClusterGroup>
+            </MapContainer>
+
+            <div className="mapa-info">
+              <p>
+                <strong>Total de focos exibidos:</strong> {queimadas.length.toLocaleString('pt-BR')}
+              </p>
+              {queimadas.length > limiteAvisoMarcadores && (
+                <p className="info-warning">
+                  Exibindo {queimadas.length.toLocaleString('pt-BR')} focos de maneira agrupada para manter o desempenho.
+                  Aproxime o mapa para expandir os clusters e ver detalhes específicos.
+                </p>
+              )}
+              <p className="info-text">
+                Clique nos marcadores vermelhos para ver detalhes de cada foco de queimada.
+              </p>
+            </div>
+          </>
+        ) : !loading && (
+          <div className="sem-dados">
+            <div className="sem-dados-icone">📊</div>
+            <h3>Nenhum dado para exibir</h3>
+            <p>Aguardando aplicação dos filtros ou não há focos no período selecionado.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

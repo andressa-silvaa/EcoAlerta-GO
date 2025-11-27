@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using EcoAlerta.Api.Services;
 using EcoAlerta.Api.DTOs;
+using System.Text.RegularExpressions;
 
 namespace EcoAlerta.Api.Controllers;
 
@@ -18,6 +19,10 @@ namespace EcoAlerta.Api.Controllers;
 [Produces("application/json")]
 public class QueimadasController : ControllerBase
 {
+    private const int MaxMunicipioLength = 200;
+    private const int MaxAnosRetroativos = 5;
+    private static readonly Regex MunicipioRegex = new(@"[^a-zA-ZáàâãéèêíìîóòôõúùûçÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ\s\-'\.]", RegexOptions.Compiled);
+
     private readonly IQueimadaService _queimadaService;
     private readonly ILogger<QueimadasController> _logger;
 
@@ -48,63 +53,25 @@ public class QueimadasController : ControllerBase
     {
         try
         {
-            var hoje = DateTime.UtcNow.Date;
-            DateTime? inicioNormalizado = dataInicio?.Date;
-            DateTime? fimNormalizado = dataFim?.Date;
-
-            if (inicioNormalizado.HasValue && fimNormalizado.HasValue && inicioNormalizado > fimNormalizado)
+            var periodoErro = ValidarPeriodo(dataInicio, dataFim, out var inicioNormalizado, out var fimNormalizado, validarJanelaCompleta: true);
+            if (periodoErro is not null)
             {
-                return BadRequest(new { message = "Data de início deve ser anterior à data de fim" });
+                return periodoErro;
             }
 
-            var limiteAnos = 5;
-            var dataLimite = hoje.AddYears(-limiteAnos);
-            if (inicioNormalizado.HasValue && inicioNormalizado < dataLimite)
+            var municipioErro = TrySanitizarMunicipio(municipio, out var municipioNormalizado);
+            if (municipioErro is not null)
             {
-                return BadRequest(new { message = $"Data de início não pode ser anterior a {dataLimite:dd/MM/yyyy}" });
+                return municipioErro;
             }
 
-            if (inicioNormalizado.HasValue && inicioNormalizado > hoje)
-            {
-                return BadRequest(new { message = "Data de início não pode ser futura" });
-            }
-            if (fimNormalizado.HasValue && fimNormalizado > hoje)
-            {
-                return BadRequest(new { message = "Data de fim não pode ser futura" });
-            }
-
-            // Validação: sanitização do nome do município (remover caracteres especiais perigosos)
-            if (!string.IsNullOrWhiteSpace(municipio))
-            {
-                municipio = municipio.Trim();
-                if (municipio.Length > 200)
-                {
-                    return BadRequest(new { message = "Nome do município não pode ter mais de 200 caracteres" });
-                }
-                
-                // Validação de segurança: remover caracteres potencialmente perigosos
-                // Permitir apenas letras, números, espaços e alguns caracteres especiais comuns em nomes
-                var municipioSanitizado = System.Text.RegularExpressions.Regex.Replace(
-                    municipio, 
-                    @"[^a-zA-ZáàâãéèêíìîóòôõúùûçÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ\s\-'\.]", 
-                    string.Empty);
-                
-                if (string.IsNullOrWhiteSpace(municipioSanitizado))
-                {
-                    return BadRequest(new { message = "Nome do município contém caracteres inválidos" });
-                }
-                
-                municipio = municipioSanitizado;
-            }
-
-            var queimadas = await _queimadaService.ObterQueimadasAsync(inicioNormalizado, fimNormalizado, municipio);
+            var queimadas = await _queimadaService.ObterQueimadasAsync(inicioNormalizado, fimNormalizado, municipioNormalizado);
 
             return Ok(queimadas);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Erro ao obter queimadas");
-            // O middleware de exceções vai capturar e tratar
             throw;
         }
     }
@@ -127,13 +94,13 @@ public class QueimadasController : ControllerBase
     {
         try
         {
-            // Validação de parâmetros de data
-            if (dataInicio.HasValue && dataFim.HasValue && dataInicio > dataFim)
+            var periodoErro = ValidarPeriodo(dataInicio, dataFim, out var inicioNormalizado, out var fimNormalizado, validarJanelaCompleta: false);
+            if (periodoErro is not null)
             {
-                return BadRequest(new { message = "Data de início deve ser anterior à data de fim" });
+                return periodoErro;
             }
 
-            var estatisticas = await _queimadaService.ObterEstatisticasPorMunicipioAsync(dataInicio, dataFim);
+            var estatisticas = await _queimadaService.ObterEstatisticasPorMunicipioAsync(inicioNormalizado, fimNormalizado);
             return Ok(estatisticas);
         }
         catch (Exception ex)
@@ -161,13 +128,13 @@ public class QueimadasController : ControllerBase
     {
         try
         {
-            // Validação de parâmetros de data
-            if (dataInicio.HasValue && dataFim.HasValue && dataInicio > dataFim)
+            var periodoErro = ValidarPeriodo(dataInicio, dataFim, out var inicioNormalizado, out var fimNormalizado, validarJanelaCompleta: false);
+            if (periodoErro is not null)
             {
-                return BadRequest(new { message = "Data de início deve ser anterior à data de fim" });
+                return periodoErro;
             }
 
-            var resumo = await _queimadaService.ObterResumoEstatisticasAsync(dataInicio, dataFim);
+            var resumo = await _queimadaService.ObterResumoEstatisticasAsync(inicioNormalizado, fimNormalizado);
             return Ok(resumo);
         }
         catch (Exception ex)
@@ -175,6 +142,82 @@ public class QueimadasController : ControllerBase
             _logger.LogError(ex, "Erro ao obter resumo de estatísticas");
             throw;
         }
+    }
+
+    private ActionResult? ValidarPeriodo(
+        DateTime? dataInicio,
+        DateTime? dataFim,
+        out DateTime? inicioNormalizado,
+        out DateTime? fimNormalizado,
+        bool validarJanelaCompleta)
+    {
+        inicioNormalizado = dataInicio?.Date;
+        fimNormalizado = dataFim?.Date;
+
+        var erroBasico = ValidarOrdemDatas(inicioNormalizado, fimNormalizado);
+        if (erroBasico is not null)
+        {
+            return erroBasico;
+        }
+
+        if (!validarJanelaCompleta)
+        {
+            return null;
+        }
+
+        var hoje = DateTime.UtcNow.Date;
+        var limite = hoje.AddYears(-MaxAnosRetroativos);
+
+        if (inicioNormalizado.HasValue && inicioNormalizado < limite)
+        {
+            return BadRequest(new { message = $"Data de início não pode ser anterior a {limite:dd/MM/yyyy}" });
+        }
+
+        if (inicioNormalizado.HasValue && inicioNormalizado > hoje)
+        {
+            return BadRequest(new { message = "Data de início não pode ser futura" });
+        }
+
+        if (fimNormalizado.HasValue && fimNormalizado > hoje)
+        {
+            return BadRequest(new { message = "Data de fim não pode ser futura" });
+        }
+
+        return null;
+    }
+
+    private ActionResult? ValidarOrdemDatas(DateTime? dataInicio, DateTime? dataFim)
+    {
+        if (dataInicio.HasValue && dataFim.HasValue && dataInicio > dataFim)
+        {
+            return BadRequest(new { message = "Data de início deve ser anterior à data de fim" });
+        }
+
+        return null;
+    }
+
+    private ActionResult? TrySanitizarMunicipio(string? municipio, out string? municipioSanitizado)
+    {
+        municipioSanitizado = null;
+        if (string.IsNullOrWhiteSpace(municipio))
+        {
+            return null;
+        }
+
+        var trimmed = municipio.Trim();
+        if (trimmed.Length > MaxMunicipioLength)
+        {
+            return BadRequest(new { message = "Nome do município não pode ter mais de 200 caracteres" });
+        }
+
+        var normalizado = MunicipioRegex.Replace(trimmed, string.Empty);
+        if (string.IsNullOrWhiteSpace(normalizado))
+        {
+            return BadRequest(new { message = "Nome do município contém caracteres inválidos" });
+        }
+
+        municipioSanitizado = normalizado;
+        return null;
     }
 }
 

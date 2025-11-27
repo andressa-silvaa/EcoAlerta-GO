@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("EcoAlerta.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+841c4e94b98e6101346e5d445a86dc7b0877c241")]
 [assembly: System.Reflection.AssemblyProductAttribute("EcoAlerta.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("EcoAlerta.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

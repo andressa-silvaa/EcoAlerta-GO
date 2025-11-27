@@ -43,7 +43,7 @@ public class InpeApiOptions
     /// <summary>
     /// Timeout padrão das chamadas à API externa, em segundos.
     /// </summary>
-    public int TimeoutSeconds { get; set; } = 30;
+    public int TimeoutSeconds { get; set; } = 90;
 
     /// <summary>
     /// Token opcional de autenticação (caso o INPE exija em algum momento).

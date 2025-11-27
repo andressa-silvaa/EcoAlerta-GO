@@ -1,129 +1,133 @@
 import axios from 'axios';
+import { apiCache } from '../utils/cache';
 
-/**
- * Serviço de API para comunicação com o backend .NET.
- * 
- * Este serviço encapsula todas as chamadas HTTP aos Web Services do backend,
- * seguindo o padrão de separação de responsabilidades.
- * 
- * Base URL configurável - em produção, pode apontar para o backend hospedado.
- */
-// Configuração da URL base da API do backend .NET
-// Em desenvolvimento, o backend geralmente roda em http://localhost:5285 ou https://localhost:7160
-// Para produção, configure a variável de ambiente VITE_API_BASE_URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5285';
 
-// Cria instância do axios com configurações padrão
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  timeout: 30000, // 30 segundos
+  headers: { 'Content-Type': 'application/json' },
+  timeout: 120000, // Aumentado para 120 segundos (2 minutos)
 });
 
-/**
- * Tratamento global de erros HTTP.
- * Converte erros de rede/HTTP em mensagens amigáveis para o usuário.
- */
-apiClient.interceptors.response.use(
-  (response) => response,
+// Interceptor de requisição para log
+apiClient.interceptors.request.use(
+  (config) => {
+    console.log(`🚀 Requisição iniciada: ${config.method?.toUpperCase()} ${config.url}`);
+    config.metadata = { startTime: new Date() };
+    return config;
+  },
   (error) => {
-    if (error.response) {
-      // Erro com resposta do servidor
-      console.error('Erro na resposta da API:', error.response.data);
-      throw new Error(error.response.data?.message || 'Erro ao processar requisição');
-    } else if (error.request) {
-      // Erro de rede (sem resposta)
-      console.error('Erro de rede:', error.request);
-      throw new Error('Não foi possível conectar ao servidor. Verifique sua conexão.');
-    } else {
-      // Outro tipo de erro
-      console.error('Erro:', error.message);
-      throw new Error(error.message || 'Erro desconhecido');
-    }
+    console.error('❌ Erro ao iniciar requisição:', error);
+    return Promise.reject(error);
   }
 );
 
-/**
- * Obtém lista de queimadas com filtros opcionais.
- * 
- * @param {Date|null} dataInicio - Data inicial do período
- * @param {Date|null} dataFim - Data final do período
- * @param {string|null} municipio - Nome do município para filtrar
- * @returns {Promise<Array>} Lista de queimadas
- */
-export const obterQueimadas = async (dataInicio = null, dataFim = null, municipio = null) => {
-  try {
-    const params = new URLSearchParams();
+// Interceptor de resposta para log e tratamento de erros
+apiClient.interceptors.response.use(
+  (response) => {
+    const duration = new Date() - response.config.metadata.startTime;
+    console.log(`✅ Resposta recebida: ${response.status} em ${duration}ms - ${response.config.url}`);
+    return response;
+  },
+  (error) => {
+    const duration = error.config?.metadata?.startTime 
+      ? new Date() - error.config.metadata.startTime 
+      : 0;
     
-    if (dataInicio) {
-      params.append('dataInicio', dataInicio.toISOString().split('T')[0]);
-    }
-    if (dataFim) {
-      params.append('dataFim', dataFim.toISOString().split('T')[0]);
-    }
-    if (municipio) {
-      params.append('municipio', municipio);
+    console.error('❌ Erro na requisição:', {
+      url: error.config?.url,
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message,
+      code: error.code,
+      duration: `${duration}ms`
+    });
+
+    if (error.response) {
+      const message = error.response.data?.message || 'Erro ao processar requisição';
+      throw new Error(message);
     }
 
-    const response = await apiClient.get(`/api/queimadas?${params.toString()}`);
-    return response.data;
-  } catch (error) {
-    console.error('Erro ao obter queimadas:', error);
-    throw error;
+    if (error.request) {
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('A requisição demorou muito. O servidor pode estar sobrecarregado.');
+      }
+      throw new Error('Não foi possível conectar ao servidor. Verifique sua conexão.');
+    }
+
+    throw new Error(error.message || 'Erro desconhecido');
   }
+);
+
+const toIsoDate = (value) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().split('T')[0];
 };
 
-/**
- * Obtém estatísticas de focos agrupados por município.
- * 
- * @param {Date|null} dataInicio - Data inicial do período
- * @param {Date|null} dataFim - Data final do período
- * @returns {Promise<Array>} Lista de estatísticas por município
- */
-export const obterEstatisticasPorMunicipio = async (dataInicio = null, dataFim = null) => {
-  try {
-    const params = new URLSearchParams();
-    
-    if (dataInicio) {
-      params.append('dataInicio', dataInicio.toISOString().split('T')[0]);
-    }
-    if (dataFim) {
-      params.append('dataFim', dataFim.toISOString().split('T')[0]);
-    }
+const normalizeFilters = (dataInicio, dataFim, municipio) => ({
+  dataInicio: toIsoDate(dataInicio),
+  dataFim: toIsoDate(dataFim),
+  municipio: municipio?.trim() || null,
+});
 
-    const response = await apiClient.get(`/api/queimadas/estatisticas/municipios?${params.toString()}`);
-    return response.data;
-  } catch (error) {
-    console.error('Erro ao obter estatísticas por município:', error);
-    throw error;
-  }
+const buildQuery = (filters = {}) => {
+  const search = new URLSearchParams();
+
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value) {
+      search.append(key, value);
+    }
+  });
+
+  const query = search.toString();
+  return query ? `?${query}` : '';
 };
 
-/**
- * Obtém resumo geral das estatísticas de queimadas.
- * 
- * @param {Date|null} dataInicio - Data inicial do período
- * @param {Date|null} dataFim - Data final do período
- * @returns {Promise<Object>} Resumo das estatísticas
- */
-export const obterResumoEstatisticas = async (dataInicio = null, dataFim = null) => {
-  try {
-    const params = new URLSearchParams();
-    
-    if (dataInicio) {
-      params.append('dataInicio', dataInicio.toISOString().split('T')[0]);
-    }
-    if (dataFim) {
-      params.append('dataFim', dataFim.toISOString().split('T')[0]);
-    }
-
-    const response = await apiClient.get(`/api/queimadas/estatisticas/resumo?${params.toString()}`);
-    return response.data;
-  } catch (error) {
-    console.error('Erro ao obter resumo de estatísticas:', error);
-    throw error;
+const get = async (path, filters) => {
+  const query = buildQuery(filters);
+  const fullPath = `${path}${query}`;
+  
+  // Verifica cache primeiro
+  const cacheKey = apiCache.generateKey(path, filters);
+  const cachedData = apiCache.get(cacheKey);
+  
+  if (cachedData) {
+    return cachedData;
   }
+  
+  // Se não estiver em cache, busca da API
+  const { data } = await apiClient.get(fullPath);
+  
+  // Armazena no cache
+  apiCache.set(cacheKey, data);
+  
+  return data;
 };
+
+export const obterQueimadas = (dataInicio = null, dataFim = null, municipio = null) =>
+  get('/api/queimadas', normalizeFilters(dataInicio, dataFim, municipio));
+
+export const obterEstatisticasPorMunicipio = (dataInicio = null, dataFim = null) =>
+  get('/api/queimadas/estatisticas/municipios', normalizeFilters(dataInicio, dataFim));
+
+export const obterResumoEstatisticas = (dataInicio = null, dataFim = null) =>
+  get('/api/queimadas/estatisticas/resumo', normalizeFilters(dataInicio, dataFim));
+
+// Função para limpar o cache manualmente se necessário
+export const limparCache = () => {
+  apiCache.clear();
+  console.log('🗑️ Cache limpo com sucesso');
+};
+
+// Limpa o cache ao carregar a aplicação (para garantir dados frescos após mudanças)
+if (typeof window !== 'undefined') {
+  // Limpa cache uma vez ao carregar a página
+  const ultimaLimpeza = sessionStorage.getItem('cache_limpo');
+  if (!ultimaLimpeza) {
+    console.log('🔄 Primeira carga - limpando cache');
+    apiCache.clear();
+    sessionStorage.setItem('cache_limpo', Date.now().toString());
+  }
+}
 

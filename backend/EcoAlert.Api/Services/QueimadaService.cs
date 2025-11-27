@@ -2,20 +2,14 @@ using EcoAlerta.Api.Clients;
 using EcoAlerta.Api.DTOs;
 using EcoAlerta.Api.Models;
 using Microsoft.Extensions.Logging;
+using System.Globalization;
 
 namespace EcoAlerta.Api.Services;
 
-/// <summary>
-/// Serviço de negócio para processamento de dados de queimadas.
-/// 
-/// Responsabilidades:
-/// - Aplicar regras de negócio (filtros, validações)
-/// - Orquestrar chamadas ao cliente da API do INPE
-/// - Processar e agregar dados para estatísticas
-/// - Converter modelos internos em DTOs para a API
-/// </summary>
 public class QueimadaService : IQueimadaService
 {
+    private static readonly CompareInfo MunicipioComparer = CultureInfo.GetCultureInfo("pt-BR").CompareInfo;
+
     private readonly IInpeApiClient _inpeApiClient;
     private readonly ILogger<QueimadaService> _logger;
 
@@ -25,60 +19,28 @@ public class QueimadaService : IQueimadaService
         _logger = logger;
     }
 
-    /// <summary>
-    /// Obtém lista de queimadas aplicando filtros de negócio.
-    /// 
-    /// Regras de negócio aplicadas:
-    /// 1. Filtro obrigatório: apenas estado de Goiás (já aplicado no cliente INPE)
-    /// 2. Filtro opcional por intervalo de datas
-    /// 3. Filtro opcional por município
-    /// </summary>
     public async Task<List<QueimadaDto>> ObterQueimadasAsync(DateTime? dataInicio, DateTime? dataFim, string? municipio)
     {
-        _logger.LogInformation($"Consultando queimadas - DataInicio: {dataInicio}, DataFim: {dataFim}, Municipio: {municipio}");
+        _logger.LogInformation(
+            "Consultando queimadas. Início: {Inicio}, Fim: {Fim}, Município: {Municipio}",
+            dataInicio,
+            dataFim,
+            municipio);
 
-        // Obtém dados da API do INPE (ou mock)
         var queimadas = await _inpeApiClient.ObterFocosQueimadasAsync(dataInicio, dataFim);
+        var filtradas = FiltrarPorMunicipio(queimadas, municipio);
 
-        // Aplica filtro por município se fornecido
-        if (!string.IsNullOrWhiteSpace(municipio))
-        {
-            queimadas = queimadas
-                .Where(q => q.Municipio.Contains(municipio, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-        }
-
-        // Converte modelos internos para DTOs (separação de camadas)
-        var dtos = queimadas.Select(q => new QueimadaDto
-        {
-            Id = q.Id,
-            DataHora = q.DataHora,
-            Municipio = q.Municipio,
-            Estado = q.Estado,
-            Latitude = q.Latitude,
-            Longitude = q.Longitude,
-            Intensidade = q.Intensidade,
-            FonteSatelite = q.FonteSatelite
-        }).ToList();
-
-        _logger.LogInformation($"Retornando {dtos.Count} queimadas após aplicação de filtros");
-
-        return dtos;
+        _logger.LogInformation("Retornando {Quantidade} focos após filtros", filtradas.Count);
+        return MapearParaDto(filtradas);
     }
 
-    /// <summary>
-    /// Calcula estatísticas de focos agrupados por município.
-    /// 
-    /// Esta agregação permite análise geográfica dos dados,
-    /// identificando quais municípios têm maior incidência de queimadas.
-    /// </summary>
     public async Task<List<EstatisticasMunicipiosDto>> ObterEstatisticasPorMunicipioAsync(DateTime? dataInicio, DateTime? dataFim)
     {
-        _logger.LogInformation("Calculando estatísticas por município");
+        _logger.LogInformation("Calculando estatísticas por município. Início: {Inicio}, Fim: {Fim}", dataInicio, dataFim);
 
         var queimadas = await _inpeApiClient.ObterFocosQueimadasAsync(dataInicio, dataFim);
 
-        var estatisticas = queimadas
+        return queimadas
             .GroupBy(q => q.Municipio)
             .Select(g => new EstatisticasMunicipiosDto
             {
@@ -87,65 +49,86 @@ public class QueimadaService : IQueimadaService
             })
             .OrderByDescending(e => e.TotalFocos)
             .ToList();
-
-        _logger.LogInformation($"Estatísticas calculadas para {estatisticas.Count} municípios");
-
-        return estatisticas;
     }
 
-    /// <summary>
-    /// Calcula resumo geral das estatísticas de queimadas.
-    /// 
-    /// Fornece métricas consolidadas para o dashboard:
-    /// - Total de focos
-    /// - Total de municípios afetados
-    /// - Data com mais focos
-    /// - Média de focos por dia
-    /// </summary>
     public async Task<ResumoEstatisticasDto> ObterResumoEstatisticasAsync(DateTime? dataInicio, DateTime? dataFim)
     {
-        _logger.LogInformation("Calculando resumo de estatísticas");
+        _logger.LogInformation("Calculando resumo de estatísticas. Início: {Inicio}, Fim: {Fim}", dataInicio, dataFim);
 
         var queimadas = await _inpeApiClient.ObterFocosQueimadasAsync(dataInicio, dataFim);
-
         if (!queimadas.Any())
         {
-            return new ResumoEstatisticasDto
-            {
-                TotalFocos = 0,
-                TotalMunicipiosAfetados = 0,
-                MediaFocosPorDia = 0
-            };
+            return new ResumoEstatisticasDto();
         }
 
         var totalFocos = queimadas.Count;
         var municipiosAfetados = queimadas.Select(q => q.Municipio).Distinct().Count();
-
-        // Calcula dia com mais focos
         var focosPorDia = queimadas
             .GroupBy(q => q.DataHora.Date)
             .Select(g => new { Data = g.Key, Total = g.Count() })
             .OrderByDescending(x => x.Total)
-            .FirstOrDefault();
+            .ToList();
 
-        // Calcula média de focos por dia
-        var diasNoPeriodo = dataInicio.HasValue && dataFim.HasValue
-            ? (dataFim.Value - dataInicio.Value).Days + 1
-            : 30; // Default para 30 dias se não especificado
-        var mediaFocosPorDia = diasNoPeriodo > 0 ? (double)totalFocos / diasNoPeriodo : 0;
+        var diaComMaisFocos = focosPorDia.FirstOrDefault();
+        var diasNoPeriodo = CalcularNumeroDeDias(dataInicio, dataFim, queimadas);
+        var media = diasNoPeriodo > 0 ? Math.Round(totalFocos / (double)diasNoPeriodo, 2) : 0;
 
-        var resumo = new ResumoEstatisticasDto
+        return new ResumoEstatisticasDto
         {
             TotalFocos = totalFocos,
             TotalMunicipiosAfetados = municipiosAfetados,
-            DataComMaisFocos = focosPorDia?.Data,
-            FocosNaDataMaxima = focosPorDia?.Total ?? 0,
-            MediaFocosPorDia = Math.Round(mediaFocosPorDia, 2)
+            DataComMaisFocos = diaComMaisFocos?.Data,
+            FocosNaDataMaxima = diaComMaisFocos?.Total ?? 0,
+            MediaFocosPorDia = media
         };
+    }
 
-        _logger.LogInformation($"Resumo calculado: {totalFocos} focos em {municipiosAfetados} municípios");
+    private static List<Queimada> FiltrarPorMunicipio(List<Queimada> dados, string? municipio)
+    {
+        if (string.IsNullOrWhiteSpace(municipio))
+        {
+            return dados;
+        }
 
-        return resumo;
+        // Usa Compare ao invés de IndexOf para comparação EXATA (não substring)
+        return dados
+            .Where(q => MunicipioComparer.Compare(
+                q.Municipio,
+                municipio,
+                CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) == 0)
+            .ToList();
+    }
+
+    private static List<QueimadaDto> MapearParaDto(IEnumerable<Queimada> queimadas)
+        => queimadas
+            .Select(q => new QueimadaDto
+            {
+                Id = q.Id,
+                DataHora = q.DataHora,
+                Municipio = q.Municipio,
+                Estado = q.Estado,
+                Latitude = q.Latitude,
+                Longitude = q.Longitude,
+                Intensidade = q.Intensidade,
+                FonteSatelite = q.FonteSatelite
+            })
+            .ToList();
+
+    private static int CalcularNumeroDeDias(DateTime? dataInicio, DateTime? dataFim, IReadOnlyCollection<Queimada> dados)
+    {
+        if (dataInicio.HasValue && dataFim.HasValue)
+        {
+            return Math.Max(1, (dataFim.Value.Date - dataInicio.Value.Date).Days + 1);
+        }
+
+        if (dados.Count == 0)
+        {
+            return 0;
+        }
+
+        var primeiraData = dados.Min(q => q.DataHora.Date);
+        var ultimaData = dados.Max(q => q.DataHora.Date);
+        return Math.Max(1, (ultimaData - primeiraData).Days + 1);
     }
 }
 
