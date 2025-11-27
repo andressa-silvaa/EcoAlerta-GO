@@ -1,7 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
-  (import.meta.env.MODE === 'production' 
-    ? 'https://ecoalerta-go.onrender.com' 
-    : 'http://localhost:5285');
+const API_BASE_URL = 'https://ecoalerta-go.onrender.com';
 
 const DEFAULT_DATE_RANGE_DAYS = 30;
 const DEBOUNCE_DELAY_MS = 800;

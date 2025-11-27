@@ -4,7 +4,6 @@ import MarkerClusterGroup from 'react-leaflet-cluster';
 import Filtros from '../components/Filtros';
 import LoadingBanner from '../components/LoadingBanner';
 import ErrorMessage from '../components/ErrorMessage';
-import EmptyState from '../components/EmptyState';
 import MapMarker from '../components/map/MapMarker';
 import { fireIcon, clusterConfig } from '../components/map/MapConfig';
 import { useMapData } from '../hooks/useMapData';
@@ -66,7 +65,7 @@ function Mapa() {
       )}
 
       <div className="mapa-wrapper" style={{ opacity: loading ? 0.5 : 1, transition: 'opacity 0.3s' }}>
-        {queimadas.length > 0 ? (
+        {queimadas.length > 0 && (
           <>
             <MapContainer
               center={MAP_CONFIG.CENTER_GOIAS}
@@ -86,12 +85,6 @@ function Mapa() {
 
             <MapInfo count={queimadas.length} warningLimit={MAP_CONFIG.MARKER_WARNING_LIMIT} />
           </>
-        ) : !loading && (
-          <EmptyState
-            icon="📊"
-            title="Nenhum dado para exibir"
-            message="Aguardando aplicação dos filtros ou não há focos no período selecionado."
-          />
         )}
       </div>
     </div>

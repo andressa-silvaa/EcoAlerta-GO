@@ -12,7 +12,9 @@ services:
       - key: InpeApiOptions__BaseUrl
         value: https://terrabrasilis.dpi.inpe.br/queimadas/geoserver/
       - key: Cors__AllowedOrigins__0
-        value: https://frontend-a7f68w9zu-andressas-projects-37c54a16.vercel.app
+        value: https://frontend-hf4j0d32l-andressas-projects-37c54a16.vercel.app
       - key: Cors__AllowedOrigins__1
+        value: https://frontend-a7f68w9zu-andressas-projects-37c54a16.vercel.app
+      - key: Cors__AllowedOrigins__2
         value: https://frontend-1cqj967q1-andressas-projects-37c54a16.vercel.app
 
