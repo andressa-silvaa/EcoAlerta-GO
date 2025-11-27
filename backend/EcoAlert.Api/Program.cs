@@ -22,6 +22,8 @@ static void ConfigureServices(IServiceCollection services, IConfiguration config
     services.AddCorsPolicy(configuration);
     services.AddSwaggerDocumentation();
 
+    services.AddSingleton<IApiCacheService, ApiCacheService>();
+
     services.AddHttpClient<IInpeApiClient, InpeApiClient>((serviceProvider, client) =>
     {
         var options = serviceProvider.GetRequiredService<IOptions<InpeApiOptions>>().Value;

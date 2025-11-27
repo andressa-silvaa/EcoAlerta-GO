@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using EcoAlerta.Api.Configuration;
 using EcoAlerta.Api.Models;
 using EcoAlerta.Api.Clients.Inpe;
+using EcoAlerta.Api.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -21,6 +22,7 @@ public class InpeApiClient : IInpeApiClient
     private readonly HttpClient _httpClient;
     private readonly ILogger<InpeApiClient> _logger;
     private readonly InpeApiOptions _options;
+    private readonly IApiCacheService _cache;
     private readonly JsonSerializerOptions _serializerOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -30,11 +32,13 @@ public class InpeApiClient : IInpeApiClient
     public InpeApiClient(
         HttpClient httpClient,
         ILogger<InpeApiClient> logger,
-        IOptions<InpeApiOptions> options)
+        IOptions<InpeApiOptions> options,
+        IApiCacheService cache)
     {
         _httpClient = httpClient;
         _logger = logger;
         _options = options.Value;
+        _cache = cache;
     }
 
     public async Task<List<Queimada>> ObterFocosQueimadasAsync(
@@ -42,6 +46,16 @@ public class InpeApiClient : IInpeApiClient
         DateTime? dataFim = null)
     {
         var (start, end) = NormalizeDateRange(dataInicio, dataFim);
+        var cacheKey = $"queimadas_{start:yyyyMMdd}_{end:yyyyMMdd}";
+
+        var cached = _cache.Get(cacheKey);
+        if (cached != null)
+        {
+            _logger.LogInformation("Cache HIT for key {Key}", cacheKey);
+            return cached;
+        }
+
+        _logger.LogInformation("Cache MISS for key {Key}. Fetching from INPE API...", cacheKey);
 
         try
         {
@@ -55,7 +69,9 @@ public class InpeApiClient : IInpeApiClient
                 return MockDataGenerator.Generate(start, end, _options);
             }
 
-            return MapToQueimadas(records);
+            var queimadas = MapToQueimadas(records);
+            _cache.Set(cacheKey, queimadas, TimeSpan.FromMinutes(5));
+            return queimadas;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
         {
