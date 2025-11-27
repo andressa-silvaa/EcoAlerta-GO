@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: ecoalerta-api
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_URLS
+        value: http://+:10000
+      - key: InpeApiOptions__BaseUrl
+        value: https://terrabrasilis.dpi.inpe.br/queimadas/geoserver/
+      - key: Cors__AllowedOrigins__0
+        value: https://frontend-1cqj967q1-andressas-projects-37c54a16.vercel.app
+
