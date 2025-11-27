@@ -37,7 +37,6 @@ function Filtros({ onFiltrosChange }) {
     if (onFiltrosChange) {
       applyFilters(inputs);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -49,7 +48,6 @@ function Filtros({ onFiltrosChange }) {
     if (onFiltrosChange) {
       applyFilters(debouncedInputs);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedInputs]);
 
   useEffect(() => {

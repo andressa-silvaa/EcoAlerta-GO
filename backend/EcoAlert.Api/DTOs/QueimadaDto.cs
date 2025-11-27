@@ -1,9 +1,5 @@
 namespace EcoAlerta.Api.DTOs;
 
-/// <summary>
-/// DTO (Data Transfer Object) para transferência de dados de queimadas via API.
-/// Separa a camada de modelo interno da camada de API, seguindo boas práticas de arquitetura.
-/// </summary>
 public class QueimadaDto
 {
     public int Id { get; set; }

@@ -5,10 +5,6 @@ using EcoAlerta.Api.Validation;
 
 namespace EcoAlerta.Api.Controllers;
 
-/// <summary>
-/// Controller REST para endpoints de queimadas.
-/// Expõe os Web Services da aplicação seguindo padrões REST.
-/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 [Produces("application/json")]

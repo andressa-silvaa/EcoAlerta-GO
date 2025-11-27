@@ -104,7 +104,6 @@
   font-size: 0.9rem;
 }
 
-/* Município Select Customizado */
 .municipio-select {
   position: relative;
   z-index: 1000;
@@ -253,7 +252,6 @@
   flex-shrink: 0;
 }
 
-/* Indicador de debounce/aguardando */
 .filtro-aguardando {
   margin-top: 15px;
   padding: 10px 14px;
@@ -278,7 +276,6 @@
   flex-shrink: 0;
 }
 
-/* Responsivo */
 @media (max-width: 768px) {
   .filtros-container {
     padding: 20px;

@@ -9,9 +9,6 @@ using Microsoft.Extensions.Options;
 
 namespace EcoAlerta.Api.Clients;
 
-/// <summary>
-/// Cliente HTTP para integração com a API do INPE (Instituto Nacional de Pesquisas Espaciais).
-/// </summary>
 public interface IInpeApiClient
 {
     Task<List<Queimada>> ObterFocosQueimadasAsync(DateTime? dataInicio = null, DateTime? dataFim = null);

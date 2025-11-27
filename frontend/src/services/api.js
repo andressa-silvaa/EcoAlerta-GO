@@ -106,12 +106,10 @@ const clearCacheOnFirstLoad = () => {
   }
 };
 
-// Setup interceptors
 setupRequestInterceptor();
 setupResponseInterceptor();
 clearCacheOnFirstLoad();
 
-// API methods
 export const obterQueimadas = (dataInicio = null, dataFim = null, municipio = null) =>
   fetchWithCache('/api/queimadas', normalizeFilters(dataInicio, dataFim, municipio));
 

@@ -1,6 +1,3 @@
-/**
- * Valida se data de início é anterior à data de fim
- */
 export const validateDateRange = (startDate, endDate) => {
   if (!startDate || !endDate) return { isValid: true };
 
@@ -17,9 +14,6 @@ export const validateDateRange = (startDate, endDate) => {
   return { isValid: true };
 };
 
-/**
- * Sanitiza nome de município (remove caracteres inválidos)
- */
 export const sanitizeMunicipioName = (name) => {
   if (!name) return null;
   const trimmed = name.trim();

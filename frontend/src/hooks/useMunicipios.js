@@ -2,9 +2,6 @@ import { useState, useEffect } from 'react';
 
 const IBGE_API_URL = 'https://servicodados.ibge.gov.br/api/v1/localidades/estados/GO/municipios?orderBy=nome';
 
-/**
- * Hook para carregar lista de municípios de Goiás
- */
 export const useMunicipios = () => {
   const [municipios, setMunicipios] = useState([]);
   const [loading, setLoading] = useState(true);

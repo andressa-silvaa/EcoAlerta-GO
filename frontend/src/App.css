@@ -1,5 +1,3 @@
-/* Estilos globais da aplicação */
-
 .app {
   min-height: 100vh;
   display: flex;
@@ -12,7 +10,6 @@
   padding: 20px 0;
 }
 
-/* Navegação */
 .navegacao {
   background: linear-gradient(135deg, #8b0000 0%, #d32f2f 50%, #ff6f00 100%);
   color: white;
@@ -90,7 +87,6 @@
   box-shadow: 0 2px 8px rgba(255, 111, 0, 0.4);
 }
 
-/* Footer */
 .app-footer {
   background: linear-gradient(135deg, #8b0000 0%, #a52a2a 50%, #c62828 100%);
   color: white;
@@ -112,7 +108,6 @@
   font-size: 1rem;
 }
 
-/* Responsividade */
 @media (max-width: 768px) {
   .nav-container {
     flex-direction: column;

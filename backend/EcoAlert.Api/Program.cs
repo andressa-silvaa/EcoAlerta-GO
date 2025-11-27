@@ -6,12 +6,10 @@ using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure services
 ConfigureServices(builder.Services, builder.Configuration);
 
 var app = builder.Build();
 
-// Configure middleware pipeline
 ConfigureMiddleware(app, app.Environment);
 
 app.Run();
@@ -51,9 +49,6 @@ static void ConfigureMiddleware(IApplicationBuilder app, IWebHostEnvironment env
     app.UseSwaggerDocumentation(environment);
     app.UseRequestLogging();
     app.UseSecurityHeaders();
-
-    // Uncomment for production with HTTPS
-    // app.UseHttpsRedirection();
 
     app.UseAuthorization();
     app.UseRouting();

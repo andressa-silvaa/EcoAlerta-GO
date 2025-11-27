@@ -1,21 +1,8 @@
-/**
- * Componente principal da aplicação.
- * 
- * Configura o roteamento entre as páginas principais:
- * - Dashboard: Visão geral com estatísticas e gráficos
- * - Mapa: Visualização geográfica dos focos de queimadas
- * 
- * Utiliza React Router para navegação entre páginas.
- */
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import Mapa from './pages/Mapa';
 import './App.css';
 
-/**
- * Componente de navegação com menu de links.
- * Exibe um menu horizontal no topo da aplicação.
- */
 function Navegacao() {
   const location = useLocation();
 

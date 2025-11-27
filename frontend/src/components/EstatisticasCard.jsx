@@ -1,9 +1,4 @@
-/**
- * Componente de Card para exibir estatísticas.
- * 
- * Usado no dashboard para mostrar métricas importantes de forma visual,
- * como total de focos, municípios afetados, etc.
- */
+
 import './EstatisticasCard.css';
 
 function EstatisticasCard({ titulo, valor, icone, cor = '#4a90e2' }) {

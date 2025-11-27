@@ -3,7 +3,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5285
 const DEFAULT_DATE_RANGE_DAYS = 30;
 const DEBOUNCE_DELAY_MS = 800;
 const MIN_LOADING_TIME_MS = 300;
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL_MS = 5 * 60 * 1000; 
 
 const MAP_CONFIG = {
   CENTER_GOIAS: [-16.6864, -49.2643],

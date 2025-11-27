@@ -68,7 +68,6 @@ public class ExceptionHandlingMiddleware
 
             default:
                 response.StatusCode = (int)HttpStatusCode.InternalServerError;
-                // Em desenvolvimento, mostra detalhes do erro. Em produção, mensagem genérica.
                 if (_environment.IsDevelopment())
                 {
                     errorResponse.Message = exception.Message;
@@ -77,7 +76,6 @@ public class ExceptionHandlingMiddleware
                 break;
         }
 
-        // Log do erro completo (apenas no servidor)
         _logger.LogError(exception, "Erro processado: {Message}", errorResponse.Message);
 
         var jsonResponse = JsonSerializer.Serialize(errorResponse, new JsonSerializerOptions
@@ -89,9 +87,6 @@ public class ExceptionHandlingMiddleware
     }
 }
 
-/// <summary>
-/// Modelo de resposta de erro padronizado.
-/// </summary>
 public class ErrorResponse
 {
     public string Message { get; set; } = string.Empty;

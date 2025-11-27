@@ -1,8 +1,5 @@
 import { parseBrazilianDate } from './dateUtils';
 
-/**
- * Agrupa focos de queimadas por dia
- */
 export const groupFocosByDay = (queimadas = []) => {
   const groupMap = new Map();
 
@@ -19,9 +16,6 @@ export const groupFocosByDay = (queimadas = []) => {
     .sort((a, b) => parseBrazilianDate(a.data) - parseBrazilianDate(b.data));
 };
 
-/**
- * Calcula estatísticas agrupadas por município
- */
 export const calculateMunicipioStats = (queimadas = []) => {
   const municipioMap = new Map();
 
@@ -35,9 +29,6 @@ export const calculateMunicipioStats = (queimadas = []) => {
     .sort((a, b) => b.totalFocos - a.totalFocos);
 };
 
-/**
- * Calcula resumo geral das estatísticas
- */
 export const calculateSummary = (queimadas = []) => {
   if (!queimadas.length) {
     return {
@@ -77,9 +68,6 @@ export const calculateSummary = (queimadas = []) => {
   };
 };
 
-/**
- * Limita lista de municípios ao top N
- */
 export const limitTopMunicipios = (municipios = [], limit = 10) => {
   return municipios.slice(0, limit);
 };

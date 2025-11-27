@@ -90,7 +90,6 @@ public class QueimadaService : IQueimadaService
             return dados;
         }
 
-        // Usa Compare ao invés de IndexOf para comparação EXATA (não substring)
         return dados
             .Where(q => MunicipioComparer.Compare(
                 q.Municipio,
